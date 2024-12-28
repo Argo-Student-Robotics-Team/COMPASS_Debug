@@ -336,16 +336,13 @@ def resize_content(sender, app_data):
 dpg.set_viewport_resize_callback(resize_content)
 
 # METODA ZA PONOVNO ISCRTAVANJE NA MAPI
-def moveRover(sender, app_data, user_data,intensity):
+def moveRover(sender, app_data, user_data):
     global x, y, r
 
-    if intensity==None:
-        intensity=0.4
-
     #print(f"{x}, {y}, {r} - before")
-    Dx = cos(radians(r-90))*intensity
+    Dx = cos(radians(r-90))*user_data
     x -= Dx
-    Dy = sin(radians(r-90))*intensity
+    Dy = sin(radians(r-90))*user_data
     y += Dy
     dpg.configure_item("rover_poly", points=draw_rover(x,y,rover_w, rover_l))
     dpg.configure_item("rover_arrow", p2=(x,y), p1=(x, y-40))
@@ -358,36 +355,22 @@ def moveRover(sender, app_data, user_data,intensity):
     add_log(f"Current position: ({x},{y},{z})")
 
 
-
-
-
 # [ DEBUGING FUNKCIJE ]
-def steerRoverL(sender, app_data, user_data,intensity):
-    if intensity==None:
-        intensity=0.4
+def steerRover(sender, app_data, user_data):
     global r
-    r += intensity
+    r += user_data
 
-def steerRoverR(sender, app_data, user_data,intensity):
-    if intensity==None:
-        intensity=0.4
-    global r
-    r -= intensity
-
-def steerMastL(sender, app_data, user_data):
+def steerMast(sender, app_data, user_data):
     global mast_r
-    mast_r += 0.4
+    mast_r += user_data
 
-def steerMastR(sender, app_data, user_data):
-    global mast_r
-    mast_r -= 0.4
 
 with dpg.handler_registry():
-    dpg.add_key_down_handler(key=dpg.mvKey_W, callback=moveRover)
-    dpg.add_key_down_handler(key=dpg.mvKey_A, callback=steerRoverL)
-    dpg.add_key_down_handler(key=dpg.mvKey_D, callback=steerRoverR)
-    dpg.add_key_down_handler(key=dpg.mvKey_Q, callback=steerMastL)
-    dpg.add_key_down_handler(key=dpg.mvKey_E, callback=steerMastR)
+    dpg.add_key_down_handler(key=dpg.mvKey_W, callback=moveRover,user_data=0.4)
+    dpg.add_key_down_handler(key=dpg.mvKey_A, callback=steerRover,user_data=0.4)
+    dpg.add_key_down_handler(key=dpg.mvKey_D, callback=steerRover,user_data=-0.4)
+    dpg.add_key_down_handler(key=dpg.mvKey_Q, callback=steerMast,user_data=0.4)
+    dpg.add_key_down_handler(key=dpg.mvKey_E, callback=steerMast,user_data=-0.4)
 
 def gamepad_input():
     if joystick:
@@ -398,29 +381,27 @@ def gamepad_input():
         axis3 = joystick.get_axis(3)
         DpadLR,DpadUD = joystick.get_hat(0)  # tapl,prvi je levo(-) desno(+) drugi je gore dole,
 
+        if axis1<-0.01:
+            moveRover(None,None,abs(axis1*0.4))
 
         if axis2>0:
-            steerRoverR(None,None,None,axis2*0.4)
-
+            steerRover(None,None,-(axis2*0.4))
         else:
-            steerRoverL(None,None,None,abs(axis2)*0.4)
+            steerRover(None,None,-(axis2*0.4))
 
-        if axis1<-0.01:
-            moveRover(None,None,None,abs(axis1*0.4))
+
 
         if DpadLR != 0:
             if DpadLR>0:
-                steerMastR(None,None,None)
+                steerMast(None,None,-0.4)
             else:
-                steerMastL(None,None,None)
-
+                steerMast(None,None,0.4)
 
 # POKRETANJE GLAVNOG PROGRAMA
 dpg.show_viewport()
 while dpg.is_dearpygui_running():
     gamepad_input()
     updateValues()
-
 
     #r = dpg.get_value("rotation_knob")
     #mast_r = dpg.get_value("mast_rotation_knob")
