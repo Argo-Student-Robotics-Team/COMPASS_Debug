@@ -34,7 +34,7 @@ y = 500
 z = 0
 
 Dx = 0
-Dx = 0
+Dy = 0 # ranije je ovde pisalo Dx?
 
 r = 0
 mast_r = 0
@@ -89,18 +89,73 @@ pathfinding_flag = False
 w, h, channels, data = dpg.load_image(file="depth_map2.png")
 w2, h2, channels2, data2 = dpg.load_image(file="terrain_map.png")
 
-#Gamepad implementacija
-pygame.init()
-pygame.joystick.init()
-if pygame.joystick.get_count() > 0:
-    joystick = pygame.joystick.Joystick(0)
-    joystick.init()
-    print(f"Joystick initialized: {joystick.get_name()}")
-else:
-    joystick=None
-    print("No joystick detected")
+# LOGOVANJE
+# Global log storage
+log_messages = []
 
+# Clear the log file at program start
+def initialize_log_file():
+    try:
+        with open("log_messages.txt", "w") as file:  # Open in write mode to truncate the file
+            file.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Log file initialized.\n")
+    except Exception as e:
+        print(f"Error initializing log file: {e}")
 
+# Initialize the log file
+initialize_log_file()
+
+# Save log message to a file immediately
+def save_log_to_file(message):
+    try:
+        with open("log_messages.txt", "a") as file:  # Append mode to keep existing logs
+            file.write(message + "\n")
+    except Exception as e:
+        print(f"Error saving log to file: {e}")
+
+# Add a log message to the log console
+# This function also stores the log message in the global log_messages list for later use
+def add_log(message):
+    global log_messages
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    full_message = f"[{timestamp}] {message}"
+    log_messages.append(full_message)
+
+    # Save the log to file immediately
+    save_log_to_file(full_message)
+
+    # Izbegavamo prepunjavanje console_log i log_messages tako sto cemo da smanjimo broj poruka u listi za 1900 i
+    # icrtacemo novi console_log tako da sadrzi samo poslednjih 100 poruka.
+    if(len(log_messages)>2000):
+        log_messages=log_messages[1900:]
+        # Update the log console dynamically
+        if dpg.does_item_exist("log_console"):
+            # Clear the console and re-add messages after truncating
+            dpg.delete_item("log_console", children_only=True)  # Remove existing log messages
+            for log in log_messages:
+                dpg.add_text(log, parent="log_console")  # Add the new truncated messages
+
+            # Scroll to the bottom of the console
+            dpg.set_y_scroll("log_console", dpg.get_y_scroll_max("log_console"))
+    else:
+        # Update the log console dynamically
+        if dpg.does_item_exist("log_console"):
+            dpg.add_text(full_message, parent="log_console")
+            dpg.set_y_scroll("log_console", dpg.get_y_scroll_max("log_console"))
+
+# Clear the log console and the global log_messages list of all messages
+def clear_logs():
+    global log_messages # This needs to be implemented the other way because its better not to use global variables in functions
+
+    # Add a "Logs Cleared" message to both file and console
+    add_log("Log Console Cleared")
+
+    # Clear the log_messages list
+    log_messages = []
+
+    # Clear the log console visually
+    if dpg.does_item_exist("log_console"):
+        dpg.delete_item("log_console", children_only=True)
+        dpg.add_text("Log Console Cleared", parent="log_console")
 
 # BITNE FUNKCIJE
 def pixelToMeterCoord(x,y):
@@ -135,8 +190,14 @@ def autonomy_start(sender, app_data, user_data):
     dpg.set_item_label(sender, new_label)
 
     if new_label == "Stop Autonomy":
+        add_log(f"Autonomy started. Initial position: ({pixelToMeterCoord(x, y)})")
         dpg.bind_item_theme(sender, autonomy_btn_theme)
+
     else:
+        actual_position = pixelToMeterCoord(x, y)
+        target_position = pixelToMeterCoord(currentWCoord[0], currentWCoord[1])
+        compare_positions(target_position, actual_position)
+        add_log(f"Autonomy stopped. Final position: ({actual_position[0]:.2f}, {actual_position[1]:.2f})")
         dpg.bind_item_theme(sender, autonomy_btn_theme) # Default to blue
 
 def showCoords(sender, coordTag):
@@ -150,6 +211,7 @@ def changeGoalPoint(sender, appData, userData):
     global currentWCoord
     currentWCoord = normalizeCoord(coordValue)
     dpg.configure_item("goalDistanceLine", p2 = currentWCoord)
+    add_log(f"New Target Position: {coordValue}")
 
 def changeMapOpacity(sender, appData, userData):
     opacity = dpg.get_value(sender)
@@ -167,16 +229,6 @@ def updateValues():
     goalDistance = sqrt(abs(x - currentWCoord[0])**2 + abs(y - currentWCoord[1])**2)/meter
     #add_log(str(currentWCoord))
     dpg.configure_item("goalDist-label", default_value=f"Distance to current goal: {goalDistance} meters")
-
-log_messages = []
-# Function to add a log message
-def add_log(message):
-    message = f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] " + message
-    log_messages.append(message)
-    dpg.add_text(message, parent="log_console")
-
-    # Scroll to the bottom to show the latest log
-    dpg.set_y_scroll("log_console", dpg.get_y_scroll_max("log_console"))
 
 # GRAFIČKI DEO
 
@@ -231,7 +283,7 @@ with dpg.window(label="Control Unit", width=800, height=735,tag="control_unit_ta
     create_goal_distance_display()
     create_log_console()
 
-#MAP WINDOW I ISCRTAVANJE #####################################################################################################
+#MAP WINDOW I ISCRTAVANJE
 
 # PONOVNO ISCRTAVANJE ROVERA (POZIVA SE KAD GOD SE PROMENI POZICIJA)
 def draw_rover(x_val, y_val, rov_w, rov_l):
@@ -290,50 +342,22 @@ with dpg.window(label="Map", pos=(800,0),tag="map_tag"):
 
         dpg.draw_polyline(path.tolist(), color=(0,20,255), thickness=2)
 
-############################################################################################################################
 
-main_viewport_width=1920
-main_viewport_heigth=780
+# POREDJENJE SA REFERENTNOM TACKOM
+def compare_positions(target_position, actual_position):
+    add_log(f"Comparing positions...")  # Debug log
 
-conrol_unit_width=800
-control_unit_heigth=735
-control_unit_width_precentage=800/1920
-control_unit_ratio=800/735
+    # Calculate the Euclidean distance error
+    error = sqrt((target_position[0] - actual_position[0])**2 +
+                 (target_position[1] - actual_position[1])**2)
 
-map_width=1090
-map_height=700
-map_width_precentage=1090/1920
-map_ratio=1090/700
+    # Log the comparison
+    add_log(f"Actual position: ({actual_position[0]:.2f}, {actual_position[1]:.2f})")
+    add_log(f"Target position: ({target_position[0]:.2f}, {target_position[1]:.2f})")
+    add_log(f"Distance error: {error:.2f} meters")
 
-map_image_width=1100
-map_image_heigth=177*4
-map_image_precetage=1100/1920
-map_image_ratio=1100/(177*4)
+    return error
 
-
-# Promena velicine glavnog prozora i skaliranje njegove dece
-def resize_content(sender, app_data):
-    viewport_width = dpg.get_viewport_client_width()
-    viewport_height= dpg.get_viewport_client_height()
-
-    new_control_unit_width=int(viewport_width*control_unit_width_precentage)
-    new_map_width=int(viewport_width*map_width_precentage)
-
-    dpg.set_item_width("control_unit_tag",int(new_control_unit_width))
-    dpg.set_item_height("control_unit_tag",int(viewport_height))
-    dpg.set_item_pos("map_tag", (int(new_control_unit_width),0))
-    dpg.set_item_width("drawlist_tag",int(new_map_width))
-    dpg.set_item_height("drawlist_tag",int(viewport_height))
-
-    new_map_image_width=int(viewport_width*map_image_precetage)
-
-    #dpg.draw_image("texture_map_tag", (0, 0), (1100, 177*4), uv_min=(0, 0), uv_max=(1, 1))
-    #dpg.draw_image("texture_depth_tag", (0, 0), (1100, 177*4), tag="depth-map",  uv_min=(0, 0), uv_max=(1, 1), color=(255,255,255,0))
-
-    dpg.set_item_size("texture_map_tag", (new_map_image_width, int(new_map_image_width/map_image_ratio)))
-    dpg.set_item_size("texture_depth_tag", (new_map_image_width, int(new_map_image_width/map_image_ratio)))
-
-dpg.set_viewport_resize_callback(resize_content)
 
 # METODA ZA PONOVNO ISCRTAVANJE NA MAPI
 def moveRover(sender, app_data, user_data):
@@ -354,15 +378,29 @@ def moveRover(sender, app_data, user_data):
     dpg.configure_item("goalDistanceLine", p1 = (x,y))
     add_log(f"Current position: ({x},{y},{z})")
 
+    # Compare with target position (example: currentWCoord is the target)
+    actual_position = pixelToMeterCoord(x, y)
+    target_position = pixelToMeterCoord(currentWCoord[0], currentWCoord[1])
+    compare_positions(target_position, actual_position)
+    add_log(f"Rover moved to position: ({pixelToMeterCoord(x, y)})")
+
 
 # [ DEBUGING FUNKCIJE ]
 def steerRover(sender, app_data, user_data):
     global r
     r += user_data
+    if(user_data>0):
+        add_log(f"Rover steered left. Current angle: {r}")
+    else:
+        add_log(f"Rover steered right. Current angle: {r}")
 
 def steerMast(sender, app_data, user_data):
     global mast_r
     mast_r += user_data
+    if(user_data>0):
+        add_log(f"Mast steered left. Current angle: {mast_r}")
+    else:
+        add_log(f"Mast steered right. Current angle: {mast_r}")
 
 
 with dpg.handler_registry():
@@ -371,6 +409,19 @@ with dpg.handler_registry():
     dpg.add_key_down_handler(key=dpg.mvKey_D, callback=steerRover,user_data=-0.4)
     dpg.add_key_down_handler(key=dpg.mvKey_Q, callback=steerMast,user_data=0.4)
     dpg.add_key_down_handler(key=dpg.mvKey_E, callback=steerMast,user_data=-0.4)
+
+#GAMEPAD IMPLEMENTATION
+pygame.init()
+pygame.joystick.init()
+if pygame.joystick.get_count() > 0:
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+    print(f"Joystick initialized: {joystick.get_name()}")
+    add_log(f"Joystick initialized: {joystick.get_name()}")
+else:
+    joystick=None
+    print("No joystick detected")
+    add_log(f"No joystick detected")
 
 def gamepad_input():
     if joystick:
@@ -384,12 +435,13 @@ def gamepad_input():
         if axis1<-0.01:
             moveRover(None,None,abs(axis1*0.4))
 
-        if axis2>0:
+        #izgleda zbunjujuce, axis2 ima vrednosti[-1,1], kada je na -1 tada treba da skrene u levo pa dobijemo
+        # -(-1*0.4) i time dobije 0.4 sto znaci skrecemo levo jer je rezultat u plusu
+        # a kada je axis2=1 onda -(1*0.4) i time dobijemo -0.4 sto znaci da skrecemo desno
+        if axis2>0.01:
             steerRover(None,None,-(axis2*0.4))
-        else:
+        if axis2<-0.01:
             steerRover(None,None,-(axis2*0.4))
-
-
 
         if DpadLR != 0:
             if DpadLR>0:
