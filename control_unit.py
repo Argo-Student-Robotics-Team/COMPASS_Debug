@@ -1,3 +1,4 @@
+import subprocess
 import dearpygui.dearpygui as dpg
 from math import *
 import datetime
@@ -184,6 +185,11 @@ with dpg.theme() as log_console_theme:
     with dpg.theme_component(dpg.mvChildWindow):
         dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (30, 30, 30, 255))  # Dark gray background
 
+def open_camera():
+    add_log("Camera opened")
+    subprocess.run(["python", "camera.py"])
+    add_log("Camera closed")
+
 def autonomy_start(sender, app_data, user_data):
     button_label = dpg.get_item_label(sender)
     new_label = "Stop Autonomy" if button_label == "Start Autonomy" else "Start Autonomy"
@@ -235,6 +241,7 @@ def updateValues():
 # UI
 def create_control_buttons():
     """Create control buttons for the control unit."""
+    dpg.add_button(label="Open camera",callback=open_camera)
     dpg.add_button(label="Start Autonomy", callback=autonomy_start)
     dpg.add_button(label="Start Coordinatization")
     dpg.add_button(label="Start Testing Module")
