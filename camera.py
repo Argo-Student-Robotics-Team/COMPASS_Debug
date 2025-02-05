@@ -83,7 +83,8 @@ def set_aspect_ratio_mode():
 
 
 def fit_to_window():
-    for _ in range(2):
+    for _ in range(2): #kada se menja sirina prozora , dearpygui se zaglupi pa
+        # onda moram 2 puta ovo da vrtim da bi lepo uradio ono sto trazim od njega
         global stretch_mode
         viewport_width = dpg.get_viewport_width()
         viewport_height = dpg.get_viewport_height()
@@ -93,9 +94,12 @@ def fit_to_window():
 
         if ratio < aspect_ratio:  # Viewport is too wide
             new_height = int(viewport_width / aspect_ratio)
-            dpg.set_viewport_height(new_height+27)  #iz nekog razloga moram ovde 27, ne znam zasto pa sam morao da nabadam, ali radi i to je jedino sto je bitno
+            dpg.set_viewport_height(new_height+27)  #iz nekog razloga moram ovde 27, ne znam zasto pa sam morao da nabadam,
+                                                    # ali radi i to je jedino sto je bitno
         else:  # Viewport is too tall
             new_width = int(viewport_height * aspect_ratio)
+            dpg.set_viewport_height(viewport_height+1)  #iz nekog razloga kada menja sirinu prozora,
+                                                        # ne promeni je kako treba dok se ne promeni opet visina. Ne razzumem zasto ali ovo bi trebalo da radi
             dpg.set_viewport_width(new_width)
 
 
