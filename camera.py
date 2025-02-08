@@ -13,9 +13,6 @@ with dpg.theme() as no_padding_theme:
         # Then add the style to the component
         dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 0, 0, category=dpg.mvThemeCat_Core)
 
-
-dpg.create_viewport(title="Cam Feed", width=800, height=660, resizable=True)
-
 # Open webcam
 vid = cv2.VideoCapture(0)
 if not vid.isOpened():
@@ -30,10 +27,14 @@ stretch_mode = False  # Default to keeping aspect ratio
 
 print(f"Camera Resolution: {frame_width}x{frame_height}")
 
+dpg.create_viewport(title="Cam Feed", width=frame_width+16, height=frame_height + 39, resizable=True)
+
+
 # Function to process frame
-def process_frame(frame):
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
-    return (frame.astype(np.float32) / 255.0).ravel()
+def process_frame(frame_bgr):
+    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
+    return (frame_rgb.astype(np.float32) / 255.0).ravel()
+
 
 # Read initial frame
 ret, frame = vid.read()
@@ -46,7 +47,8 @@ texture_data = process_frame(frame)
 
 # Create texture registry
 with dpg.texture_registry(show=False):
-    dpg.add_raw_texture(frame_width, frame_height, texture_data,format=dpg.mvFormat_Float_rgb, tag="texture_tag")
+    dpg.add_raw_texture(frame_width, frame_height, texture_data, format=dpg.mvFormat_Float_rgb, tag="texture_tag")
+
 
 # Function to update image size and position
 def update_image_size():
@@ -68,13 +70,16 @@ def update_image_size():
 
     dpg.configure_item("image_tag", width=new_width, height=new_height)
     dpg.configure_item("image_container", pos=(pad_x, pad_y))
+    dpg.configure_item("button_container", pos=(pad_x, pad_y))
     dpg.configure_item("fit_to_window_button", show=not stretch_mode)
+
 
 # Button Callbacks
 def set_stretch_mode():
     global stretch_mode
     stretch_mode = True
     update_image_size()
+
 
 def set_aspect_ratio_mode():
     global stretch_mode
@@ -83,58 +88,56 @@ def set_aspect_ratio_mode():
 
 
 def fit_to_window():
-    for _ in range(2): #kada se menja sirina prozora , dearpygui se zaglupi pa
-        # onda moram 2 puta ovo da vrtim da bi lepo uradio ono sto trazim od njega
-        global stretch_mode
-        viewport_width = dpg.get_viewport_width()
-        viewport_height = dpg.get_viewport_height()
+    global stretch_mode
+    viewport_width = dpg.get_viewport_client_width()
+    viewport_height = dpg.get_viewport_client_height()
 
-        # Calculate the aspect ratio of the viewport
-        ratio = viewport_width / viewport_height
+    # Calculate the aspect ratio of the viewport
+    ratio = viewport_width / viewport_height
 
-        if ratio < aspect_ratio:  # Viewport is too wide
-            new_height = int(viewport_width / aspect_ratio)
-            dpg.set_viewport_height(new_height+27)  #iz nekog razloga moram ovde 27, ne znam zasto pa sam morao da nabadam,
-                                                    # ali radi i to je jedino sto je bitno
-        else:  # Viewport is too tall
-            new_width = int(viewport_height * aspect_ratio)
-            dpg.set_viewport_height(viewport_height+1)  #iz nekog razloga kada menja sirinu prozora,
-                                                        # ne promeni je kako treba dok se ne promeni opet visina. Ne razzumem zasto ali ovo bi trebalo da radi
-            dpg.set_viewport_width(new_width)
+    if ratio < aspect_ratio:  # Viewport is too tall
+
+        new_height = int(viewport_width / aspect_ratio)
+        dpg.set_viewport_height(new_height + dpg.get_viewport_height()-dpg.get_viewport_client_height())
+
+    elif ratio > aspect_ratio:  # Viewport is too wide
+
+        new_width = int(viewport_height * aspect_ratio)
+        dpg.set_viewport_width(new_width + dpg.get_viewport_width()-dpg.get_viewport_client_width())
+
+    update_image_size()
 
 
 # UI Setup
 with dpg.window(tag="main_window", no_title_bar=True, no_resize=True, no_move=True, no_scrollbar=True) as main_window:
-
     dpg.bind_item_theme(main_window, no_padding_theme)
 
-    # Container for the image to allow padding
     with dpg.group(tag="image_container"):
         dpg.add_image("texture_tag", tag="image_tag")
 
-    with dpg.group(horizontal=True):
-        dpg.add_button(label="Stretch", width=100, callback=set_stretch_mode)
+    with dpg.group(horizontal=True, tag="button_container"):
+        dpg.add_button(label="Stretch", width=80, callback=set_stretch_mode)
         dpg.add_button(label="Keep Aspect Ratio", width=150, callback=set_aspect_ratio_mode)
-        dpg.add_button(label="Fit to Window", width=150, callback=fit_to_window, tag="fit_to_window_button", show=False)
+        dpg.add_button(label="Fit to Window", width=130, callback=fit_to_window, tag="fit_to_window_button", show=False)
 
 # Set it as the main viewport window
 dpg.set_primary_window("main_window", True)
 
 # Resize callback with debouncing
 last_resize_time = 0
-def resize_callback(sender, app_data):
+def resize_callback(sender,app_data):
     global last_resize_time
     current_time = time.time()
     if current_time - last_resize_time > 0.1:  # Debounce time of 100ms
         update_image_size()
         last_resize_time = current_time
 
+
 dpg.set_viewport_resize_callback(resize_callback)
 
 # Start Dear PyGui
 dpg.setup_dearpygui()
 dpg.show_viewport()
-fit_to_window()
 
 # Main loop
 while dpg.is_dearpygui_running():
@@ -142,7 +145,6 @@ while dpg.is_dearpygui_running():
     if ret:
         texture_data = process_frame(frame)
         dpg.set_value("texture_tag", texture_data)
-
     dpg.render_dearpygui_frame()
 
 # Cleanup
